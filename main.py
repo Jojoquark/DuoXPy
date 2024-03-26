@@ -1,3 +1,8 @@
+# --------------------------- #
+# Made by GorouFlex           #
+# Ported from rfoal/duolingo  #
+# Version 1.7                 #
+# --------------------------- #
 import os
 import requests
 import json
@@ -6,7 +11,9 @@ import time
 import shutil
 from configparser import ConfigParser
 from getpass import getpass
+from datetime import datetime
 
+# Define ANSI escape code, i don't want to use colorama since i cannot figure how to make it works on cross-platform
 class colors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -19,24 +26,29 @@ class colors:
     UNDERLINE = '\033[4m'
     WHITE = '\033[97m'
 
+# Define where and the name for Config folder and some assset
 config_folder: str = 'Config'
 config_path: str = f'{config_folder}/DuoXPyConfig.txt'
 
 config: ConfigParser = ConfigParser()
 config.read(config_path)
 
+# Print information window
 print(f"{colors.WARNING}------- Welcome to DuoXPy -------{colors.ENDC}")
 print(f"{colors.OKBLUE}Made by GFx{colors.ENDC}")
+# If this script were on GitHub Actions
 if os.getenv('GITHUB_ACTIONS') == 'true':
     print(f"{colors.OKBLUE}Powered by GitHub Actions V3 and Python{colors.ENDC}")
     print(f"{colors.OKGREEN}Run with GitHub Actions: Yes{colors.ENDC}")
     print(f"{colors.WHITE}Current repo: {os.getenv('GITHUB_REPOSITORY')}{colors.ENDC}")
+    # Check repo commit 
     user_repo = os.getenv('GITHUB_REPOSITORY')
     ORIGINAL_REPO = 'gorouflex/DuoXPy'
     user_url = f'https://api.github.com/repos/{user_repo}/commits?path=main.py'
     original_url = f'https://api.github.com/repos/{ORIGINAL_REPO}/commits?path=main.py'
     user_response = requests.get(user_url, timeout=10000)
     original_response = requests.get(original_url, timeout=10000)
+    # If the API response 200 not other code to prevent some unexpected things
     if user_response.status_code == 200 and original_response.status_code == 200:
         user_commit = user_response.json()[0]['sha']
         original_commit = original_response.json()[0]['sha']
@@ -44,10 +56,9 @@ if os.getenv('GITHUB_ACTIONS') == 'true':
             print(f"{colors.OKGREEN}Your repo is up-to-date with the original repo{colors.ENDC}")
         else:
             print(f"{colors.WARNING}Your repo is not up-to-date with the original repo{colors.ENDC}")
-            print(f"{colors.FAIL}Please update your repo to the latest commit{colors.ENDC}{colors.FAIL}to get new updates and bug fixes{colors.ENDC}")
+            print(f"{colors.FAIL}Please update your repo to the latest commit{colors.ENDC}{colors.FAIL} to get new updates and bug fixes{colors.ENDC}")
     else:
         print(f"{colors.WARNING}--------- Traceback log ---------{colors.ENDC}\n{colors.FAIL}❌ Error code 4: Failed to fetch commit information\nPlease refer to: https://github.com/gorouflex/HoneygainPot/blob/main/Docs/Debug.md for more information\nOr create an Issue on GitHub if it still doesn't work for you.{colors.ENDC}")
-        exit(-1)
     print(f"{colors.WARNING}Lessons: {os.getenv('LESSONS')}{colors.ENDC}")
 else:
     print(f"{colors.FAIL}Run with GitHub Actions: No{colors.ENDC}")
@@ -62,6 +73,7 @@ print(f"{colors.WARNING}---------------------------------{colors.ENDC}")
 print(f"{colors.WHITE}Starting DuoXPy{colors.ENDC}")
 print(f"{colors.WHITE}Collecting information...{colors.ENDC}")
 
+# Take token information and save it to config
 def create_config() -> None:
     config.add_section('User')
     config.set('User', 'TOKEN', "")
@@ -69,17 +81,17 @@ def create_config() -> None:
         token = os.getenv('JWT_TOKEN')
         config.set('User', 'TOKEN', f"{token}")
         lessons = os.getenv('LESSONS')
-        config.set('User', 'LESSONS', f"{lessons}")
     else:
         token = getpass(f"{colors.WHITE}Token: {colors.ENDC}")
         config.set('User', 'TOKEN', f"{token}")
         lessons = getpass(f"{colors.WHITE}Lesson: {colors.ENDC}")
-        config.set('User', 'LESSONS', f"{lessons}")
+    config.set('User', 'LESSONS', f"{lessons}")
     with open(config_path, 'w', encoding='utf-8') as configfile:
         configfile.truncate(0)
         configfile.seek(0)
         config.write(configfile)
 
+# Check if Config it's exist or not?
 def check_config_integrity() -> None:
     if not os.path.exists(config_folder):
         print(f"{colors.WARNING}Creating new config folder at:", os.path.join(os.getcwd()))
@@ -97,6 +109,7 @@ def check_config_integrity() -> None:
 check_config_integrity()
 config.read(config_path)
 
+# Take token from config
 
 try:
     token = config.get('User', 'TOKEN')
@@ -104,37 +117,53 @@ try:
 except:
     create_config()
 
+# Configure headers for futher request
 headers = {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer ' + token,
+    'Authorization': f'Bearer {token}',
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
 }
 
+# Token processing 
 try:
     jwt_token = token.split('.')[1]
 except:
     print(f"{colors.WARNING}--------- Traceback log ---------{colors.ENDC}\n{colors.FAIL}❌ Invalid token{colors.ENDC}")
     exit(-1)
-  
+
 padding = '=' * (4 - len(jwt_token) % 4)
 sub = json.loads(base64.b64decode(jwt_token + padding).decode())
 
+# Collect date and insert to the API
+date = datetime.now().strftime('%Y-%m-%d')
+print(f"{colors.WARNING}Date: {date}{colors.ENDC}")
 response = requests.get(
-    f"https://www.duolingo.com/2017-06-30/users/{sub['sub']}?fields=fromLanguage,learningLanguage,xpGains",
+    f"https://www.duolingo.com/{date}/users/{sub['sub']}?fields=fromLanguage,learningLanguage,xpGains",
     headers=headers,
 )
 data = response.json()
+# Take element required to make a request
 fromLanguage = data['fromLanguage']
 learningLanguage = data['learningLanguage']
-xpGains = data['xpGains']
+try:
+    xpGains = data['xpGains']
+    skillId = xpGains[0]['skillId']
+except:
+    print(f"{colors.FAIL}Your Duolingo account has been banned or does not exist{colors.ENDC}")
+    exit(-1)
 
-xpGain = xpGains[-1]
-skillId = xpGain['skillId']
+skillId = next(
+    (xpGain['skillId'] for xpGain in reversed(xpGains) if 'skillId' in xpGain),
+    None,
+)
+print(f"From (Language): {fromLanguage}")
+print(f"Learning (Language): {learningLanguage}")
 
 if skillId is None:
-    print(f"{colors.FAIL}No skillId found in xpGains\nPlease do at least 1 or 9 lessons{colors.ENDC}")
+    print(f"{colors.FAIL}{colors.WARNING}--------- Traceback log ---------{colors.ENDC}\nNo skillId found in xpGains\nPlease do at least 1 or some lessons in your skill tree\nVisit https://github.com/gorouflex/DuoXPy#how-to-fix-error-500---no-skillid-found-in-xpgains for more information{colors.ENDC}")
     exit(1)
 
+# Do a loop and start make request to gain xp
 for i in range(int(lessons)):
     session_data = {
         'challengeTypes': [
@@ -188,17 +217,17 @@ for i in range(int(lessons)):
         'type': 'SPEAKING_PRACTICE',
     }
 
-    session_response = requests.post('https://www.duolingo.com/2017-06-30/sessions', json=session_data, headers=headers)
+    session_response = requests.post(f'https://www.duolingo.com/{date}/sessions', json=session_data, headers=headers)
     if session_response.status_code == 500:
-         print(f"{colors.FAIL}Session Error 500 - No skillId found in xpGains\nPlease do at least 1 or 9 lessons{colors.ENDC}")
-         exit(-1)
+         print(f"{colors.FAIL}Session Error 500 / No skillId found in xpGains or Missing some element to make a request\nPlease do at least 1 or some lessons in your skill tree\nVisit https://github.com/gorouflex/DuoXPy#how-to-fix-error-500---no-skillid-found-in-xpgains for more information{colors.ENDC}")
+         continue
     elif session_response.status_code != 200:
          print(f"{colors.FAIL}Session Error: {session_response.status_code}, {session_response.text}{colors.ENDC}")
          continue
     session = session_response.json()
 
     end_response = requests.put(
-        f"https://www.duolingo.com/2017-06-30/sessions/{session['id']}",
+        f"https://www.duolingo.com/{date}/sessions/{session['id']}",
         headers=headers,
         json={
             **session,
@@ -219,15 +248,16 @@ for i in range(int(lessons)):
         print(f"Response content: {end_response.text}")
         continue
 
-    response = requests.put(f'https://www.duolingo.com/2017-06-30/sessions/{session["id"]}', data=json.dumps(end_data), headers=headers)
+    response = requests.put(f'https://www.duolingo.com/{date}/sessions/{session["id"]}', data=json.dumps(end_data), headers=headers)
     if response.status_code == 500:
-         print(f"{colors.FAIL}Response Error 500 - No skillId found in xpGains\nPlease do at least 1 or 9 lessons{colors.ENDC}")
-         exit(-1)
+         print(f"{colors.FAIL}Response Error 500 / No skillId found in xpGains or Missing some element to make a request\nPlease do at least 1 or some lessons in your skill tree\nVisit https://github.com/gorouflex/DuoXPy#how-to-fix-error-500---no-skillid-found-in-xpgains for more information{colors.ENDC}")
+         continue
     elif response.status_code != 200:
          print(f"{colors.FAIL}Response Error: {response.status_code}, {response.text}{colors.ENDC}")
          continue
-    print(f"{colors.OKGREEN}[{i+1}] - Gained: {end_data['xpGain']} XP (✓){colors.ENDC}")
+    print(f"{colors.OKGREEN}[{i+1}] - {end_data['xpGain']} XP{colors.ENDC}")
 
+# Delete Config folder after running done on GitHub Actions (idk if it's useful or not)
 if os.getenv('GITHUB_ACTIONS') == 'true':
     try:
       shutil.rmtree(config_folder)
